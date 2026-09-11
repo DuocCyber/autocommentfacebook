@@ -1,0 +1,304 @@
+(() => {
+  const CONFIG = {
+    comment: "Chéo follow + like có thông báo em trả liền",
+    maxPosts: 10,
+    delay: 3000
+  };
+
+  let running = false;
+  let done = 0;
+  const processed = new WeakSet();
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  // =========================
+  // PANEL
+  // =========================
+  const old = document.getElementById("AUTO_COMMENT_PANEL");
+  if (old) old.remove();
+
+  const panel = document.createElement("div");
+  panel.id = "AUTO_COMMENT_PANEL";
+
+  panel.style = `
+    position:fixed;
+    top:20px;
+    right:20px;
+    z-index:999999999;
+    background:#242526;
+    color:#fff;
+    padding:15px;
+    border-radius:12px;
+    width:380px;
+    font:14px Arial;
+    box-shadow:0 5px 25px #000;
+  `;
+
+  panel.innerHTML = `
+    <div style="font-size:20px;font-weight:bold;margin-bottom:10px">
+      💬 Auto Comment
+    </div>
+
+    <textarea id="AC_TEXT"
+      style="
+        width:100%;
+        height:60px;
+        box-sizing:border-box;
+        padding:10px;
+        resize:none;
+        border-radius:6px;
+        border:0;
+        font-size:15px;
+      ">${CONFIG.comment}</textarea>
+
+    <div style="margin-top:10px">
+      <button id="AC_START"
+        style="padding:8px 15px;cursor:pointer">
+        ▶ Start
+      </button>
+
+      <button id="AC_STOP"
+        style="padding:8px 15px;cursor:pointer">
+        ■ Stop
+      </button>
+    </div>
+
+    <div id="AC_STATUS" style="margin-top:10px">
+      🟢 Sẵn sàng
+    </div>
+  `;
+
+  document.body.appendChild(panel);
+
+  const text = panel.querySelector("#AC_TEXT");
+  const status = panel.querySelector("#AC_STATUS");
+
+  // =========================
+  // TÌM Ô COMMENT
+  // =========================
+  function findCommentBoxes() {
+    return [...document.querySelectorAll(
+      '[contenteditable="true"][role="textbox"]'
+    )].filter(el => {
+
+      if (processed.has(el)) return false;
+
+      const r = el.getBoundingClientRect();
+
+      return (
+        r.width > 150 &&
+        r.height > 10 &&
+        r.bottom > 0 &&
+        r.top < window.innerHeight
+      );
+    });
+  }
+
+  // =========================
+  // TÌM NÚT MŨI TÊN XANH
+  // =========================
+  function findSendButton(box) {
+
+    // Tìm container gần ô comment nhất
+    let parent = box;
+
+    for (let i = 0; i < 7 && parent; i++) {
+
+      const elements = [
+        ...parent.querySelectorAll(
+          'button,[role="button"]'
+        )
+      ];
+
+      const visible = elements.filter(el => {
+
+        const r = el.getBoundingClientRect();
+
+        return (
+          r.width > 10 &&
+          r.height > 10 &&
+          r.bottom > 0 &&
+          r.top < window.innerHeight &&
+          r.right > 0 &&
+          r.left < window.innerWidth
+        );
+      });
+
+      // Nút ở phía bên phải ô comment
+      const boxRect = box.getBoundingClientRect();
+
+      const rightButtons = visible.filter(el => {
+        const r = el.getBoundingClientRect();
+
+        return (
+          r.left > boxRect.left + boxRect.width * 0.65 &&
+          r.top > boxRect.top - 100 &&
+          r.top < boxRect.bottom + 100
+        );
+      });
+
+      if (rightButtons.length) {
+
+        // Nút cuối cùng bên phải thường chính là
+        // nút mũi tên xanh
+        rightButtons.sort((a, b) => {
+          return (
+            b.getBoundingClientRect().left -
+            a.getBoundingClientRect().left
+          );
+        });
+
+        return rightButtons[0];
+      }
+
+      parent = parent.parentElement;
+    }
+
+    return null;
+  }
+
+  // =========================
+  // ĐIỀN COMMENT
+  // =========================
+  function setComment(box, value) {
+
+    box.focus();
+
+    // Xóa nội dung cũ
+    document.execCommand("selectAll", false, null);
+    document.execCommand("delete", false, null);
+
+    // Điền text
+    document.execCommand(
+      "insertText",
+      false,
+      value
+    );
+
+    box.dispatchEvent(
+      new InputEvent("input", {
+        bubbles: true,
+        inputType: "insertText",
+        data: value
+      })
+    );
+
+    // Một số giao diện Facebook cần thêm event
+    box.dispatchEvent(
+      new Event("change", {
+        bubbles: true
+      })
+    );
+  }
+
+  // =========================
+  // CHẠY
+  // =========================
+  async function start() {
+
+    if (running) return;
+
+    running = true;
+    done = 0;
+
+    status.textContent = "🔎 Đang tìm bài...";
+
+    while (
+      running &&
+      done < CONFIG.maxPosts
+    ) {
+
+      const boxes = findCommentBoxes();
+
+      if (!boxes.length) {
+
+        window.scrollBy({
+          top: window.innerHeight * 0.7,
+          behavior: "smooth"
+        });
+
+        status.textContent =
+          `🔎 Đang kéo bài... ${done}/${CONFIG.maxPosts}`;
+
+        await sleep(CONFIG.delay);
+        continue;
+      }
+
+      const box = boxes[0];
+
+      processed.add(box);
+
+      box.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+
+      await sleep(800);
+
+      // Điền comment
+      setComment(box, text.value);
+
+      status.textContent =
+        `✍️ Đã điền comment ${done + 1}`;
+
+      await sleep(1200);
+
+      // Tìm nút mũi tên xanh
+      const sendButton = findSendButton(box);
+
+      if (sendButton) {
+
+        sendButton.scrollIntoView({
+          behavior: "smooth",
+          block: "center"
+        });
+
+        await sleep(300);
+
+        // CLICK NÚT MŨI TÊN XANH
+        sendButton.click();
+
+        done++;
+
+        status.textContent =
+          `✅ Đã tự đăng ${done}/${CONFIG.maxPosts}`;
+
+        await sleep(CONFIG.delay);
+
+      } else {
+
+        status.textContent =
+          "⚠️ Không tìm thấy nút mũi tên xanh";
+
+        await sleep(1500);
+      }
+
+      // Kéo xuống bài tiếp
+      window.scrollBy({
+        top: window.innerHeight * 0.65,
+        behavior: "smooth"
+      });
+
+      await sleep(1200);
+    }
+
+    running = false;
+
+    if (done >= CONFIG.maxPosts) {
+      status.textContent =
+        `🏁 Hoàn tất — đã đăng ${done} comment`;
+    }
+  }
+
+  // =========================
+  // STOP
+  // =========================
+  function stop() {
+    running = false;
+    status.textContent = "⏹ Đã dừng";
+  }
+
+  panel.querySelector("#AC_START").onclick = start;
+  panel.querySelector("#AC_STOP").onclick = stop;
+
+})();
