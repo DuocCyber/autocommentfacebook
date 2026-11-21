@@ -1,7 +1,7 @@
 (() => {
   const CONFIG = {
     comment: "Chéo follow + like có thông báo em trả liền",
-    maxPosts: 10,
+    maxPosts: 100,
     delay: 3000
   };
 
