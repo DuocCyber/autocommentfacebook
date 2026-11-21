@@ -2,7 +2,7 @@
   const CONFIG = {
     comment: "Chéo follow + like có thông báo em trả liền",
     maxPosts: 100,
-    delay: 3000
+    delay: 4000
   };
 
   let running = false;
